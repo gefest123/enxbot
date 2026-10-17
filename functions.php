@@ -428,6 +428,7 @@ function getSectors($cookies,$domain,$gameid,$model=null)
         $result['sectors'][$number] = Array(
             'found' => $found,
             'code' => $found ? encxAnswerText($sector['Answer'] ?? null) : '',
+            'label' => trim((string)($sector['Name'] ?? '')),
         );
     }
     $sectors_rem = $sectors_total - $sectors_done;
@@ -697,13 +698,14 @@ function sendChatList($chat_id, $key, $text, $parse_mode = 'Markdown')
 }
 
 /**
- * Формирует текст списка меток или бонусов.
+ * Формирует HTML-текст списка меток или бонусов для Telegram.
  * $mode: all - все, open - только незакрытые, closed - только закрытые.
  * Найденная в поле, но ещё не взятая метка (find) помечается отдельно.
  */
 function formatCodeList($items, $mode, $title)
 {
   $lines = Array();
+  $title = htmlspecialchars((string)$title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
   foreach($items as $num => $item)
   {
@@ -715,16 +717,21 @@ function formatCodeList($items, $mode, $title)
     if(($mode === 'open' && $found) || ($mode === 'closed' && !$found))
       continue;
 
-    $label = (string)$num;
-    if(!empty($item['name']))
-      $label .= ' '.$item['name'];
+    $label = trim((string)($item['label'] ?? ''));
+    if($label === '')
+    {
+      $label = (string)$num;
+      if(!empty($item['name']))
+        $label .= ' '.$item['name'];
+    }
+    $label = htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
     if($found)
     {
-      $lines[] = "*$label:\t".$item['code']."*";
+      $lines[] = "<b>$label:\t".htmlspecialchars((string)$item['code'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')."</b>";
     } else
     {
-      $lines[] = empty($item['find']) ? "_{$label}_" : "_{$label}_ 📍";
+      $lines[] = empty($item['find']) ? "<i>$label</i>" : "<i>$label</i> 📍";
     }
   }
 

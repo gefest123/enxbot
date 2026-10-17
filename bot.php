@@ -658,7 +658,7 @@ if(isset($update["message"]))
                         $items = markFoundSectors($sectors['sectors'], $game_chat_id, $settings['last_level_id']);
                     }
 
-                    sendChatList($chat_id, $listKey, formatCodeList($items, $listMode, $listTitle));
+                    sendChatList($chat_id, $listKey, formatCodeList($items, $listMode, $listTitle), 'HTML');
                 break;
                 case '/messages':
                     if(!$settings['status'])
