@@ -186,7 +186,9 @@ while($game = db_fetch_assoc($gameresult))
                 $sql = "UPDATE codes SET code_status = 1, code = '$code' WHERE id = ".intval($codesDB[$key]['id']);
                 db_query($db, $sql);
 
-                apiRequestJSON("sendMessage", array('chat_id' => $game['chat_id'], "parse_mode" => 'Markdown', "text" => "$group[label] *$num* закрыт через движок"));
+                foreach (engineClosureMessages($group['label'], $num, $item['text'] ?? '') as $message) {
+                    apiRequestJSON("sendMessage", array('chat_id' => $game['chat_id'], "parse_mode" => 'HTML', "text" => $message));
+                }
             }
         }
     }

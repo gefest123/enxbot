@@ -1,0 +1,116 @@
+<?php
+namespace Encx {
+    // Only the Encounter transport is replaced; cron and Telegram requests run as-is.
+    final class Client {
+        public static function newClientWithOptions(...$args) {return new self();}
+        public function setCodeSendTimeoutSeconds($seconds) {}
+        public function setEngine($engine) {}
+        public function importCookies($cookies) {}
+        public function getGameModel($id) {return file_get_contents(getenv('ENXBOT_BONUS_TEST_MODEL'));}
+        public function close() {}
+    }
+}
+namespace {
+    if (($argv[1] ?? '') === '--cron') {
+        chdir($argv[2]);
+        require 'cron.php';
+        exit;
+    }
+    $root = dirname(__DIR__);
+    $work = sys_get_temp_dir().'/enxbot-bonus-test-'.bin2hex(random_bytes(6));
+    mkdir($work, 0700);
+    foreach (['cron.php', 'functions.php', 'encounter.php', 'db.php', 'db.sql', 'Html2Text.php'] as $file) {
+        copy($root.'/'.$file, $work.'/'.$file);
+    }
+    $log = $work.'/telegram.jsonl';
+    $modelPath = $work.'/model.json';
+    putenv('ENCX_ENGINE=legacy');
+    putenv('ENXBOT_TG_LOG='.$log);
+    putenv('ENXBOT_BONUS_TEST_MODEL='.$modelPath);
+    $socket = stream_socket_server('tcp://127.0.0.1:0', $errno, $error);
+    if (!$socket) throw new RuntimeException('Could not reserve a local test port');
+    $address = stream_socket_get_name($socket, false);
+    fclose($socket);
+    file_put_contents($work.'/config.php', '<?php $sqlite_path = __DIR__."/test.sqlite"; define("API_URL", '
+        .var_export('http://'.$address.'/tg/', true).');');
+    $server = proc_open([PHP_BINARY, '-S', $address, __DIR__.'/stub_server.php'], [
+        0 => ['pipe', 'r'], 1 => ['file', $work.'/server.log', 'a'], 2 => ['file', $work.'/server.log', 'a'],
+    ], $pipes);
+    if (!is_resource($server)) throw new RuntimeException('Could not start Telegram stub');
+    fclose($pipes[0]);
+    $checks = 0;
+    function bonusCheck($condition, $message) {
+        global $checks;
+        if (!$condition) throw new RuntimeException($message);
+        $checks++;
+    }
+    function runBonusCron($work) {
+        $process = proc_open([PHP_BINARY, '-d', 'display_errors=stderr', __FILE__, '--cron', $work], [
+            0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w'],
+        ], $pipes);
+        fclose($pipes[0]);
+        $output = stream_get_contents($pipes[1]);
+        $errors = stream_get_contents($pipes[2]);
+        fclose($pipes[1]); fclose($pipes[2]);
+        bonusCheck(proc_close($process) === 0 && $errors === '', 'Cron failed: '.$output.$errors);
+    }
+    try {
+        for ($attempt = 0; $attempt < 30; $attempt++) {
+            if (@file_get_contents('http://'.$address.'/tg/getMe') !== false) break;
+            usleep(100000);
+        }
+        bonusCheck($attempt < 30, 'Telegram stub did not become ready');
+        file_put_contents($log, '');
+        $sqlite_path = $work.'/test.sqlite';
+        require $work.'/db.php';
+        $db->exec("INSERT INTO games (chat_id, game_id, game_domain, cookies, last_level_id, status)
+            VALUES (-1001, 42, 'test.invalid', '[]', 101, 1)");
+        $task = '<p>Точка <b>А_1*</b> [карта] &amp; &lt;вход&gt;</p><p>Далее 🚀</p>';
+        $long = str_repeat('Д🚀 &< >_[]* ', 600);
+        $model = ['Event' => 0, 'GameTitle' => 'Synthetic bonus test', 'Level' => [
+            'LevelId' => 101, 'Number' => 1, 'Sectors' => [['Order' => 10, 'IsAnswered' => false]],
+            'Bonuses' => [
+                ['Number' => 10, 'IsAnswered' => false, 'Task' => $task],
+                ['Number' => 11, 'IsAnswered' => false],
+                ['Number' => 12, 'IsAnswered' => false],
+                ['Number' => 13, 'IsAnswered' => true, 'Task' => 'Old bonus'],
+            ],
+        ]];
+        file_put_contents($modelPath, json_encode($model));
+        runBonusCron($work);
+        bonusCheck(file_get_contents($log) === '', 'Initial snapshot sent a closure notice');
+        $model['Level']['Sectors'][0]['IsAnswered'] = true;
+        foreach ($model['Level']['Bonuses'] as &$bonus) $bonus['IsAnswered'] = true;
+        unset($bonus);
+        $model['Level']['Bonuses'][2]['Task'] = '<p>'.htmlspecialchars($long, ENT_QUOTES, 'UTF-8').'</p>';
+        file_put_contents($modelPath, json_encode($model));
+        runBonusCron($work);
+        $calls = array_map(static fn($line) => json_decode($line, true), file($log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES));
+        $messages = array_column($calls, 'params');
+        bonusCheck(count($messages) > 4, 'Long bonus text was not split into Telegram messages');
+        bonusCheck($messages[0]['text'] === 'Сектор <b>10</b> закрыт через движок', 'Sector notice changed unexpectedly');
+        $expected = "Бонус <b>10</b> закрыт через движок\n\nТочка А_1* [карта] &amp; &lt;вход&gt;\n\nДалее 🚀";
+        bonusCheck($messages[1]['text'] === $expected, 'Bonus text or safe HTML formatting was lost');
+        bonusCheck($messages[2]['text'] === 'Бонус <b>11</b> закрыт через движок', 'Empty bonus text added blank content');
+        $joined = '';
+        foreach (array_slice($messages, 3) as $message) {
+            $plain = html_entity_decode(strip_tags($message['text']), ENT_QUOTES, 'UTF-8');
+            bonusCheck(strlen(iconv('UTF-8', 'UTF-16LE', $plain)) / 2 <= 4096, 'Telegram message exceeds the length limit');
+            $joined .= $plain;
+        }
+        bonusCheck($joined === "Бонус 12 закрыт через движок\n\n".trim($long), 'Long bonus text was truncated or corrupted');
+        foreach ($messages as $message) {
+            bonusCheck($message['chat_id'] === -1001 && $message['parse_mode'] === 'HTML', 'Incorrect Telegram target or parse mode');
+        }
+        bonusCheck((int)$db->query('SELECT COUNT(*) FROM codes WHERE code_status = 1')->fetchColumn() === 5, 'Closed state was not persisted');
+        $before = file_get_contents($log);
+        runBonusCron($work);
+        bonusCheck(file_get_contents($log) === $before, 'A repeated cron sent duplicate bonus text');
+        echo "Bonus notification regression checks passed: $checks\n";
+    } finally {
+        proc_terminate($server); proc_close($server);
+        $db = null;
+        foreach (glob($work.'/*') as $file) unlink($file);
+        rmdir($work);
+    }
+}

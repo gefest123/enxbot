@@ -434,7 +434,7 @@ function getSectors($cookies,$domain,$gameid)
 
 /**
  * Бонусы текущего уровня из игровой модели движка.
- * Возвращает сводный текст и массив вида номер => [found, code, name].
+ * Возвращает сводный текст и массив вида номер => [found, code, name, text].
  */
 function getBonuses($cookies,$domain,$gameid)
 {
@@ -466,11 +466,31 @@ function getBonuses($cookies,$domain,$gameid)
             'found' => $found,
             'code' => $found ? encxAnswerText($bonus['Answer'] ?? null) : '',
             'name' => trim((string)($bonus['Name'] ?? '')),
+            'text' => trim(html2text((string)($bonus['Task'] ?? ''))),
         );
     }
     $result['text'] = "На уровне $total бонусов. Взято $done. Осталось ".($total - $done);
     ksort($result['bonuses'], SORT_NUMERIC);
     return $result;
+}
+
+/** Closure notice and optional bonus text, escaped for Telegram HTML. */
+function engineClosureMessages($label, $number, $text = '')
+{
+    $messages = array(htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+        .' <b>'.intval($number).'</b> закрыт через движок');
+    // At most 4000 UTF-16 units per chunk, leaving room for the first header.
+    // Split before escaping so HTML entities and UTF-8 characters stay intact.
+    preg_match_all('/.{1,2000}/us', trim((string)$text), $chunks);
+    foreach ($chunks[0] as $index => $chunk) {
+        $escaped = htmlspecialchars($chunk, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        if ($index === 0) {
+            $messages[0] .= "\n\n".$escaped;
+        } else {
+            $messages[] = $escaped;
+        }
+    }
+    return $messages;
 }
 
 function getMessages($cookies,$domain,$gameid)
