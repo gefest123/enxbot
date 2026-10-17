@@ -529,14 +529,19 @@ function getBonuses($cookies,$domain,$gameid,$model=null)
     return $result;
 }
 
-/** Closure notice and optional bonus text, escaped for Telegram HTML. */
-function engineClosureMessages($label, $number, $text = '')
+/** Closure notice, answer code and optional bonus text, escaped for Telegram HTML. */
+function engineClosureMessages($label, $number, $text = '', $code = '')
 {
     $messages = array(htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
         .' <b>'.intval($number).'</b> закрыт через движок');
+    $body = trim((string)$text);
+    $code = (string)$code;
+    if (trim($code) !== '') {
+        $body = 'Код: '.$code.($body !== '' ? "\n\n".$body : '');
+    }
     // At most 4000 UTF-16 units per chunk, leaving room for the first header.
     // Split before escaping so HTML entities and UTF-8 characters stay intact.
-    preg_match_all('/.{1,2000}/us', trim((string)$text), $chunks);
+    preg_match_all('/.{1,2000}/us', $body, $chunks);
     foreach ($chunks[0] as $index => $chunk) {
         $escaped = htmlspecialchars($chunk, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         if ($index === 0) {

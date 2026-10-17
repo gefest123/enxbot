@@ -76,6 +76,8 @@ namespace {
             VALUES (-1001, 42, 'test.invalid', '[]', 101, 1)");
         $task = '<p>Точка <b>А_1*</b> [карта] &amp; &lt;вход&gt;</p><p>Далее 🚀</p>';
         $long = str_repeat('Д🚀 &< >_[]* ', 600);
+        $sectorCode = 'en_23* [вход] <&';
+        $longCode = str_repeat('en🚀<&', 450);
         $model = ['Event' => 0, 'GameTitle' => 'Synthetic bonus test', 'Level' => [
             'LevelId' => 101, 'Number' => 1, 'Sectors' => [['Order' => 10, 'IsAnswered' => false]],
             'Bonuses' => [
@@ -89,16 +91,19 @@ namespace {
         runBonusCron($work);
         bonusCheck(file_get_contents($log) === '', 'Initial snapshot sent a closure notice');
         $model['Level']['Sectors'][0]['IsAnswered'] = true;
+        $model['Level']['Sectors'][0]['Answer'] = $sectorCode;
         foreach ($model['Level']['Bonuses'] as &$bonus) $bonus['IsAnswered'] = true;
         unset($bonus);
+        $model['Level']['Bonuses'][0]['Answer'] = 'bonus-test';
+        $model['Level']['Bonuses'][2]['Answer'] = $longCode;
         $model['Level']['Bonuses'][2]['Task'] = '<p>'.htmlspecialchars($long, ENT_QUOTES, 'UTF-8').'</p>';
         file_put_contents($modelPath, json_encode($model));
         runBonusCron($work);
         $calls = array_map(static fn($line) => json_decode($line, true), file($log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES));
         $messages = array_column($calls, 'params');
         bonusCheck(count($messages) > 4, 'Long bonus text was not split into Telegram messages');
-        bonusCheck($messages[0]['text'] === 'Сектор <b>10</b> закрыт через движок', 'Sector notice changed unexpectedly');
-        $expected = "Бонус <b>10</b> закрыт через движок\n\nТочка А_1* [карта] &amp; &lt;вход&gt;\n\nДалее 🚀";
+        bonusCheck($messages[0]['text'] === "Сектор <b>10</b> закрыт через движок\n\nКод: en_23* [вход] &lt;&amp;", 'Sector notice lost its answer code or broke HTML formatting');
+        $expected = "Бонус <b>10</b> закрыт через движок\n\nКод: bonus-test\n\nТочка А_1* [карта] &amp; &lt;вход&gt;\n\nДалее 🚀";
         bonusCheck($messages[1]['text'] === $expected, 'Bonus text or safe HTML formatting was lost');
         bonusCheck($messages[2]['text'] === 'Бонус <b>11</b> закрыт через движок', 'Empty bonus text added blank content');
         $joined = '';
@@ -107,11 +112,12 @@ namespace {
             bonusCheck(strlen(iconv('UTF-8', 'UTF-16LE', $plain)) / 2 <= 4096, 'Telegram message exceeds the length limit');
             $joined .= $plain;
         }
-        bonusCheck($joined === "Бонус 12 закрыт через движок\n\n".trim($long), 'Long bonus text was truncated or corrupted');
+        bonusCheck($joined === "Бонус 12 закрыт через движок\n\nКод: ".$longCode."\n\n".trim($long), 'Long code or bonus text was truncated or corrupted');
         foreach ($messages as $message) {
             bonusCheck($message['chat_id'] === -1001 && $message['parse_mode'] === 'HTML', 'Incorrect Telegram target or parse mode');
         }
         bonusCheck((int)$db->query('SELECT COUNT(*) FROM codes WHERE code_status = 1')->fetchColumn() === 5, 'Closed state was not persisted');
+        bonusCheck($db->query('SELECT code FROM codes WHERE code_type = 1 AND code_number = 10')->fetchColumn() === $sectorCode, 'Stored sector code differs from the notification');
         $before = file_get_contents($log);
         runBonusCron($work);
         bonusCheck(file_get_contents($log) === $before, 'A repeated cron sent duplicate bonus text');
