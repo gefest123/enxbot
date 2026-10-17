@@ -165,6 +165,19 @@ function codeUnavailableLevelResult($model, $knownLevelId = 0, $answerResult = '
     return Array('result' => $message, 'levelid' => $finished ? -1 : $knownLevelId, 'UP' => false);
 }
 
+/** Sector totals and the remaining codes required to pass the level. */
+function sectorProgress($level, $completed = false)
+{
+    $sectors = $level['Sectors'] ?? array();
+    $total = count($sectors);
+    $done = 0;
+    foreach ($sectors as $sector) $done += !empty($sector['IsAnswered']) ? 1 : 0;
+    $required = (int)($level['RequiredSectorsCount'] ?? 0);
+    $passed = $completed || !empty($level['IsPassed']) || !empty($level['Dismissed']);
+    $remaining = $total > 0 ? ($passed ? 0 : max(0, ($required > 0 ? $required : $total) - $done)) : null;
+    return array('total' => $total, 'done' => $done, 'remaining' => $remaining);
+}
+
 /** Match sectors within one level by ID, with Order as the legacy fallback. */
 function closedSectorLabels($oldLevel, $newLevel, $levelCompleted = false)
 {
@@ -263,16 +276,13 @@ function sendCode($cookies,$domain,$gameid,$code)
     }
     // On transition, describe the level the code was submitted to.
     $progressLevel = $newLevelId === $levelId ? $newLevel : ($levelCompleted ? $oldLevel : null);
-    $total = count($progressLevel['Sectors'] ?? array());
+    $progress = sectorProgress($progressLevel, $levelCompleted);
+    $total = $progress['total'];
     $progressText = '';
     if ($total > 0) {
-        $done = 0;
-        foreach ($progressLevel['Sectors'] as $sector) {
-            $done += !empty($sector['IsAnswered']) ? 1 : 0;
-        }
+        $done = $progress['done'];
         if (!$levelCompleted) $result .= " ($done/$total)";
-        $required = (int)($progressLevel['RequiredSectorsCount'] ?? 0);
-        $remaining = $levelCompleted ? 0 : max(0, ($required > 0 ? $required : $total) - $done);
+        $remaining = $progress['remaining'];
         $progressText = "\nВсего секторов: $total. Осталось до АП: $remaining.";
     }
     $result .= $closedText.$progressText;
@@ -530,7 +540,7 @@ function getBonuses($cookies,$domain,$gameid,$model=null)
 }
 
 /** Closure notice, answer code and optional bonus text, escaped for Telegram HTML. */
-function engineClosureMessages($label, $number, $text = '', $code = '')
+function engineClosureMessages($label, $number, $text = '', $code = '', $remaining = null)
 {
     $messages = array(htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
         .' <b>'.intval($number).'</b> закрыт через движок');
@@ -538,6 +548,9 @@ function engineClosureMessages($label, $number, $text = '', $code = '')
     $code = (string)$code;
     if (trim($code) !== '') {
         $body = 'Код: '.$code.($body !== '' ? "\n\n".$body : '');
+    }
+    if ($remaining !== null) {
+        $body .= ($body !== '' ? "\n\n" : '').'Кодов до АП: '.max(0, (int)$remaining).'.';
     }
     // At most 4000 UTF-16 units per chunk, leaving room for the first header.
     // Split before escaping so HTML entities and UTF-8 characters stay intact.

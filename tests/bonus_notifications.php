@@ -79,7 +79,8 @@ namespace {
         $sectorCode = 'en_23* [вход] <&';
         $longCode = str_repeat('en🚀<&', 450);
         $model = ['Event' => 0, 'GameTitle' => 'Synthetic bonus test', 'Level' => [
-            'LevelId' => 101, 'Number' => 1, 'Sectors' => [['Order' => 10, 'IsAnswered' => false]],
+            'LevelId' => 101, 'Number' => 1, 'RequiredSectorsCount' => 2,
+            'Sectors' => [['Order' => 10, 'IsAnswered' => false], ['Order' => 11, 'IsAnswered' => false], ['Order' => 12, 'IsAnswered' => false]],
             'Bonuses' => [
                 ['Number' => 10, 'IsAnswered' => false, 'Task' => $task],
                 ['Number' => 11, 'IsAnswered' => false],
@@ -102,7 +103,7 @@ namespace {
         $calls = array_map(static fn($line) => json_decode($line, true), file($log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES));
         $messages = array_column($calls, 'params');
         bonusCheck(count($messages) > 4, 'Long bonus text was not split into Telegram messages');
-        bonusCheck($messages[0]['text'] === "Сектор <b>10</b> закрыт через движок\n\nКод: en_23* [вход] &lt;&amp;", 'Sector notice lost its answer code or broke HTML formatting');
+        bonusCheck($messages[0]['text'] === "Сектор <b>10</b> закрыт через движок\n\nКод: en_23* [вход] &lt;&amp;\n\nКодов до АП: 1.", 'Sector notice lost its answer code or the partial-level threshold');
         $expected = "Бонус <b>10</b> закрыт через движок\n\nКод: bonus-test\n\nТочка А_1* [карта] &amp; &lt;вход&gt;\n\nДалее 🚀";
         bonusCheck($messages[1]['text'] === $expected, 'Bonus text or safe HTML formatting was lost');
         bonusCheck($messages[2]['text'] === 'Бонус <b>11</b> закрыт через движок', 'Empty bonus text added blank content');
@@ -121,6 +122,11 @@ namespace {
         $before = file_get_contents($log);
         runBonusCron($work);
         bonusCheck(file_get_contents($log) === $before, 'A repeated cron sent duplicate bonus text');
+        $model['Level']['Sectors'][1]['IsAnswered'] = true;
+        file_put_contents($modelPath, json_encode($model));
+        runBonusCron($work);
+        $latest = array_map(static fn($line) => json_decode($line, true), file($log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES));
+        bonusCheck(end($latest)['params']['text'] === "Сектор <b>11</b> закрыт через движок\n\nКодов до АП: 0.", 'Reached threshold did not show zero or a missing code added blank content');
         $model['Level']['LevelId'] = 102;
         $model['Level']['Number'] = 16;
         $model['Levels'] = [];
