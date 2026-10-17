@@ -846,6 +846,8 @@ help - эта справка";
             ( preg_match('#^[en1234567890]{3,}#', $text) && get_setting('noprefix', $chat_id) == 'true' ) // Соответствует регулярке на стандартный код и включена опция безпрефиксного приема стандартных кодов
             ||
             ( preg_match('#^\d{3,}$#', trim($text)) && get_setting('megadzr', $chat_id) == 'true' ) // Режим, в котором кодом считается любое число
+            ||
+            (isDrCodeMessage($text) && get_setting('dr_noprefix', $chat_id) == 'true')
         )
         {
             $sender = trim((isset($message['from']['first_name']) ? $message['from']['first_name'] : '').' '.(isset($message['from']['last_name']) ? $message['from']['last_name'] : ''));

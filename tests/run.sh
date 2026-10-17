@@ -74,6 +74,9 @@ php "$TESTS/level_text.php" || exit 1
 echo "== Полные названия меток в списках =="
 php "$TESTS/sector_labels.php" || exit 1
 
+echo "== Автоприём DR/ДР-кодов и английская раскладка =="
+php "$TESTS/dr_codes.php" || exit 1
+
 echo "== Источник encx-cli =="
 resolve_encx_source "$ROOT" || exit 1
 

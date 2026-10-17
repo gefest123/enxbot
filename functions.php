@@ -315,6 +315,28 @@ function sendCode($cookies,$domain,$gameid,$code)
     return Array('result' => $result, 'levelid' => $newLevelId ?: $levelId, 'UP' => false);
 }
 
+/** Accept a whole DR code, optionally followed by the usual // comment. */
+function isDrCodeMessage($text)
+{
+    $code = trim(explode('//', (string)$text, 2)[0]);
+    return preg_match('/\A(?:dr|др)[0-9][a-zа-яё0-9_-]*\z/iu', $code) === 1;
+}
+
+/** Unify DR/ДР and fix Russian keyboard letters in the code, not its comment. */
+function normalizeDrCode($code)
+{
+    $trimmed = trim((string)$code);
+    if (!preg_match('/\A(?:dr|др)(?=[0-9])/iu', $trimmed, $prefix)) return $code;
+    static $layout = null;
+    if ($layout === null) {
+        $lower = preg_split('//u', 'ёйцукенгшщзхъфывапролджэячсмитьбю', -1, PREG_SPLIT_NO_EMPTY);
+        $upper = preg_split('//u', 'ЁЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ', -1, PREG_SPLIT_NO_EMPTY);
+        $layout = array_combine($lower, str_split('`qwertyuiop[]asdfghjkl;\'zxcvbnm,.'))
+            + array_combine($upper, str_split('~QWERTYUIOP{}ASDFGHJKL:"ZXCVBNM<>'));
+    }
+    return 'dr'.strtr(substr($trimmed, strlen($prefix[0])), $layout);
+}
+
 function parseCode($text, $chat_id, $sender, $location=Array())
 {
   global $db;
@@ -336,7 +358,7 @@ function parseCode($text, $chat_id, $sender, $location=Array())
 
   // Пробиваем в движок все до символов //, остальное - комментарий
   $parts = explode('//', substr($text,1), 2);
-  $code = $parts[0];
+  $code = normalizeDrCode($parts[0]);
   $comment = isset($parts[1]) ? $parts[1] : '';
 
   // Если не принимать код без комментария и комментария нет
@@ -665,6 +687,7 @@ function settingsToggles()
 {
   return Array(
     'noprefix'        => 'Прием стандартных кодов без префикса',
+    'dr_noprefix'     => 'Принимать DR/ДР-коды без префикса',
     'nocomment'       => 'Не принимать код без примечания',
     'megadzr'         => 'Принимать любое число как код',
     'optimize_chat'   => 'Удалять устаревшие списки в чате',
