@@ -145,19 +145,38 @@ function getScheme($cookies,$domain,$gameid)
     return preg_match('#<img[^>]+src=["\'](.*?)["\']#is', $task, $matches) ? $matches[1] : false;
 }
 
+function codeUnavailableLevelResult($model, $knownLevelId = 0, $answerResult = '')
+{
+    $event = (int)($model['Event'] ?? 0);
+    $finished = isGameFinishedEvent($event);
+    if ($answerResult !== '') {
+        $message = $answerResult;
+    } elseif ($event === 4) {
+        $message = 'Сессия Encounter недействительна. Выполните /game auth';
+    } elseif ($finished) {
+        $message = 'Игра завершена';
+    } else {
+        $message = $event !== 0 ? Encx\Helpers::eventText($event) : 'Движок не вернул текущий уровень';
+    }
+    return Array('result' => $message, 'levelid' => $finished ? -1 : $knownLevelId, 'UP' => false);
+}
+
 function sendCode($cookies,$domain,$gameid,$code)
 {
     $bonusAccepted = false;
+    $codeAttempted = false;
+    $levelId = 0;
     try {
         $client = encxClient($domain, $cookies);
         try {
             $before = encxDecode($client->getGameModel((int)$gameid));
             $oldLevel = encxLevel($before);
             if ($oldLevel === null) {
-                return Array('result' => '', 'levelid' => -1, 'UP' => false);
+                return codeUnavailableLevelResult($before);
             }
             $levelId = (int)($oldLevel['LevelId'] ?? 0);
             $levelNumber = (int)($oldLevel['Number'] ?? 0);
+            $codeAttempted = true;
             $after = encxDecode($client->sendCode((int)$gameid, $levelId, $levelNumber, (string)$code));
 
             // Encounter принимает ответы на секторы и на бонусы разными полями формы,
@@ -176,7 +195,12 @@ function sendCode($cookies,$domain,$gameid,$code)
         }
     } catch (Throwable $e) {
         error_log('Encounter sendCode failed: '.$e->getMessage());
-        return Array('result' => '', 'levelid' => 0, 'UP' => false);
+        // A timed-out POST may already have been applied. Never replay it or
+        // report the code as rejected without an engine acknowledgement.
+        $message = $codeAttempted
+            ? 'Движок не подтвердил результат отправки. Код мог быть принят; проверьте его в игре перед повторной отправкой.'
+            : 'Не удалось получить состояние игры. Код не отправлен.';
+        return Array('result' => $message, 'levelid' => $levelId, 'UP' => false);
     }
 
     if (!empty($bonusAccepted)) {
@@ -188,7 +212,7 @@ function sendCode($cookies,$domain,$gameid,$code)
     $result = $accepted === true ? 'Код принят' : ($accepted === false ? 'Код не принят' : '');
     $newLevel = encxLevel($after);
     if ($newLevel === null) {
-        return Array('result' => $result !== '' ? $result : 'Игра завершена', 'levelid' => -1, 'UP' => false);
+        return codeUnavailableLevelResult($after, $levelId, $result);
     }
 
     $newLevelId = (int)($newLevel['LevelId'] ?? 0);

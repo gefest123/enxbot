@@ -112,13 +112,17 @@ function encxClient($domain, $cookies = '')
 {
     encxLoadBindings();
 
+    $timeoutSeconds = 60;
     $client = Encx\Client::newClientWithOptions(
         (string)$domain,
         encxBoolEnv('ENCX_INSECURE_TLS', false),
         encxUsesHTTP((string)$domain),
-        60,
+        $timeoutSeconds,
         'ru'
     );
+    // The mobile-backed bindings otherwise limit code POSTs to one second,
+    // independently of the HTTP timeout passed to the constructor.
+    $client->setCodeSendTimeoutSeconds($timeoutSeconds);
     $engine = getenv('ENCX_ENGINE');
     $client->setEngine(is_string($engine) && $engine !== '' ? $engine : 'auto');
 

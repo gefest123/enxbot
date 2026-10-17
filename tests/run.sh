@@ -86,6 +86,9 @@ else
     exit 1
 fi
 
+echo "== Отправка кодов: сессия, задержка и ошибки ответа =="
+php "$TESTS/code_submission.php" || exit 1
+
 echo "== Поиск удалённых в PHP 8 API =="
 php "$TESTS/check_removed_api.php" "$ROOT"/*.php || exit 1
 
