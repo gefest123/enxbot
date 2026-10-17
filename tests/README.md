@@ -18,6 +18,7 @@ tests/run.sh
 | Этап | Содержание |
 | --- | --- |
 | `php -l` | Все файлы проекта разбираются текущим PHP |
+| `screenshot.php` | HTTPS для игрового сайта, HTTP для локального мока, обработка отказа рендерера и удаление ошибочного снимка |
 | `check_removed_api.php` | Нет вызовов API, удалённых в PHP 7/8, и функций новее PHP 8.0 |
 | `smoke.php` | Не зависящие от движка функции `functions.php` и SQLite |
 | `encx_mock.php` | PHP → FFI → encx-cli → настоящий stateful mock движка |
@@ -32,6 +33,23 @@ tests/run.sh
 
 `stub_server.php` теперь нужен только для Telegram API и геокодера; игровая
 часть проверяется через `encx-mock` и PHP-биндинги.
+
+### Авторизация скриншотов в Chromium
+
+```sh
+python3 tests/screenshot.py
+```
+
+Нужны Chromium и ChromeDriver по путям `/usr/bin/chromium` и
+`/usr/bin/chromedriver` (они уже входят в Docker-образ). Проверка использует
+локальную страницу и тестовые cookies, без доступа к Telegram или Encounter.
+Проверяется совпадение cookies и `User-Agent` с клиентом авторизации,
+распознавание страницы входа по адресу и форме, код возврата `2` и удаление
+старого снимка при отказе авторизации. Домашний каталог пользователя должен
+быть доступен для записи; при необходимости запустите с `HOME=/tmp`.
+
+Для проверки установленного в образе рендерера можно задать
+`ENXBOT_SCREENSHOT_RUNNER=/usr/local/bin/enxbot-screenshot`.
 
 ## Проверка против `encx-mock`
 

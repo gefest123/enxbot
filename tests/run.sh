@@ -59,6 +59,9 @@ done
 [ "$LINT_FAILED" -eq 0 ] && echo "  ok   все файлы разбираются на $(php -r 'echo PHP_VERSION;')"
 [ "$LINT_FAILED" -eq 1 ] && exit 1
 
+echo "== Скриншоты: HTTPS и ошибки рендерера =="
+php "$TESTS/screenshot.php" || exit 1
+
 echo "== Источник encx-cli =="
 resolve_encx_source "$ROOT" || exit 1
 

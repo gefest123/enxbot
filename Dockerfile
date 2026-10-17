@@ -31,6 +31,7 @@ RUN python3 -c "import py_compile; py_compile.compile('/usr/local/bin/enxbot-scr
     && chown -R www-data:www-data /data /app/screens
 
 ENV ENCX_BINDINGS_PATH=/opt/encx-php \
+    HOME=/tmp \
     ENXBOT_SQLITE_PATH=/data/enxbot.sqlite \
     ENXBOT_PID_FILE=/tmp/enxbot-daemon.pid \
     ENXBOT_CRON_INTERVAL=60 \

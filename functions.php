@@ -1346,7 +1346,7 @@ function pointDistance($lat1, $lon1, $lat2, $lon2)
 
 function screenshot($sendFlag, $chat_id, $cookies, $domain, $gameid, $lastlevelid)
 {
-  $url = 'http://'.$domain.'/gameengines/encounter/play/'.$gameid.'?lang=ru';
+  $url = (encxUsesHTTP($domain) ? 'http://' : 'https://').$domain.'/gameengines/encounter/play/'.intval($gameid).'?lang=ru';
   $filename = "screens/".$chat_id.".$gameid.".intval($lastlevelid).".".microtime(true).'.png';
   // Получаем нужные куки
   $cookies = encxCookieHeader($cookies);
@@ -1365,7 +1365,21 @@ function screenshot($sendFlag, $chat_id, $cookies, $domain, $gameid, $lastleveli
   } else
   {
     $args = array($url, $filename, $guid, $stoken, $domaincookie, $atoken);
-    exec(escapeshellcmd(PHANTOMJS).' enscreen.js '.implode(' ', array_map('escapeshellarg', $args)));
+    $output = array();
+    $exitCode = 0;
+    exec(escapeshellcmd(PHANTOMJS).' enscreen.js '.implode(' ', array_map('escapeshellarg', $args)), $output, $exitCode);
+    if($exitCode !== 0 || !is_file($filename))
+    {
+      if(is_file($filename)) unlink($filename);
+      if($sendFlag)
+      {
+        $message = $exitCode === 2
+          ? 'Сессия Encounter недействительна. Выполните /game auth и повторите /screenshot'
+          : 'Ошибка: не удалось получить скриншот';
+        apiRequestJSON("sendMessage", array('chat_id' => $chat_id, "text" => $message));
+      }
+      return false;
+    }
     if($sendFlag)
     {
       if(file_exists($filename))
