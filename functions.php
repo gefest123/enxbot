@@ -261,23 +261,27 @@ function sendCode($cookies,$domain,$gameid,$code)
             $closedText = "\nЗакрыты секторы:\n• ".implode("\n• ", $labels);
         }
     }
-    if ($newLevel === null) {
-        return codeUnavailableLevelResult($after, $levelId, $result.$closedText);
-    }
-
-    if ($newLevelId > 0 && $newLevelId !== $levelId) {
-        return Array('result' => $result.$closedText, 'levelid' => $newLevelId, 'UP' => true);
-    }
-
-    $total = count($newLevel['Sectors'] ?? array());
+    // On transition, describe the level the code was submitted to.
+    $progressLevel = $newLevelId === $levelId ? $newLevel : ($levelCompleted ? $oldLevel : null);
+    $total = count($progressLevel['Sectors'] ?? array());
+    $progressText = '';
     if ($total > 0) {
         $done = 0;
-        foreach ($newLevel['Sectors'] as $sector) {
+        foreach ($progressLevel['Sectors'] as $sector) {
             $done += !empty($sector['IsAnswered']) ? 1 : 0;
         }
-        $result .= " ($done/$total)";
+        if (!$levelCompleted) $result .= " ($done/$total)";
+        $required = (int)($progressLevel['RequiredSectorsCount'] ?? 0);
+        $remaining = $levelCompleted ? 0 : max(0, ($required > 0 ? $required : $total) - $done);
+        $progressText = "\nВсего секторов: $total. Осталось до АП: $remaining.";
     }
-    $result .= $closedText;
+    $result .= $closedText.$progressText;
+    if ($newLevel === null) {
+        return codeUnavailableLevelResult($after, $levelId, $result);
+    }
+    if ($newLevelId > 0 && $newLevelId !== $levelId) {
+        return Array('result' => $result, 'levelid' => $newLevelId, 'UP' => true);
+    }
 
     $oldBonuses = array();
     foreach (($oldLevel['Bonuses'] ?? array()) as $bonus) {

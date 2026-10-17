@@ -25,7 +25,7 @@ if (str_contains($cookie, 'stoken=finished')) {
     return;
 }
 $gameId = (int)basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
-if (in_array($gameId, [424243, 424244], true)) {
+if (in_array($gameId, [424243, 424244, 424245, 424246], true)) {
     $sectors = [
         ['SectorId'=>201,'Order'=>1,'Name'=>'1. 1+','IsAnswered'=>false],
         ['SectorId'=>202,'Order'=>2,'Name'=>'2. А_Б * [вход] <арка>','IsAnswered'=>false],
@@ -37,6 +37,8 @@ if (in_array($gameId, [424243, 424244], true)) {
         unset($sector);
     }
     $level = ['LevelId'=>101,'Number'=>7,'Sectors'=>$sectors,'Bonuses'=>[]];
+    if ($gameId === 424245) $level['RequiredSectorsCount'] = 3;
+    if ($gameId === 424246) $level['RequiredSectorsCount'] = 1;
     if (in_array($answer, ['single-sector-code','multiple-sector-code','rejected-sector-code'], true)) $level['Sectors'][1]['IsAnswered'] = true;
     if ($answer === 'multiple-sector-code') {
         $level['Sectors'][0]['IsAnswered'] = true;
