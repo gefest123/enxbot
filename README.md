@@ -157,7 +157,7 @@ bare-metal — одноимёнными константами в `config.php`.
 | `ADMIN_USERNAME`         |  нет  | `''`                   | главный администратор бота (username без `@`)                 |
 | `PUBLIC_URL`             |  нет  | —                      | базовый URL для ссылок на `map.php` и адреса точек            |
 | `ENXBOT_SQLITE_PATH`     |  нет  | `/data/enxbot.sqlite`  | путь к файлу БД                                              |
-| `ENXBOT_CRON_INTERVAL`   |  нет  | `60`                   | период запуска `cron.php`, секунды                            |
+| `ENXBOT_CRON_INTERVAL`   |  нет  | `5`                    | пауза между проходами `cron.php`, секунды (одна модель на игру за проход) |
 | `ENXBOT_POLL_TIMEOUT`    |  нет  | `30`                   | таймаут Telegram long polling, 1..50 секунд                   |
 | `ENXBOT_IDLE_TIMEOUT`    |  нет  | `86400`                | тишина в чате до автоостановки игры, секунды                  |
 | `ENXBOT_CRON_LOCK_TIMEOUT` | нет | `300`                  | протухание блокировки `cron.php`, секунды                     |

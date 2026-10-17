@@ -68,6 +68,9 @@ php "$TESTS/engine_cache.php" || exit 1
 echo "== Текст закрытых бонусов в уведомлениях cron =="
 php "$TESTS/bonus_notifications.php" || exit 1
 
+echo "== Заголовок уровня при закрытой статистике =="
+php "$TESTS/level_text.php" || exit 1
+
 echo "== Источник encx-cli =="
 resolve_encx_source "$ROOT" || exit 1
 

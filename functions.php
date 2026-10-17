@@ -33,10 +33,10 @@ function testGame($cookies,$domain,$gameid)
     return isset($model['GameTitle']) && $model['GameTitle'] !== '' ? $model['GameTitle'] : false;
 }
 
-function getLevelText($cookies,$domain,$gameid)
+function getLevelText($cookies,$domain,$gameid,$model=null)
 {
     try {
-        $model = encxGameModel($cookies, $domain, $gameid);
+        $model = $model ?? encxGameModel($cookies, $domain, $gameid);
     } catch (Throwable $e) {
         return false;
     }
@@ -46,17 +46,21 @@ function getLevelText($cookies,$domain,$gameid)
         return false;
     }
     $levelNum = $level['Number'] ?? '?';
-    $levelTotal = isset($model['Levels']) && is_array($model['Levels']) ? count($model['Levels']) : '?';
-    return "<b>Уровень $levelNum из $levelTotal</b>\n".html2text($levelText);
+    $levelTotal = isset($model['Levels']) && is_array($model['Levels']) ? count($model['Levels']) : 0;
+    $title = "Уровень $levelNum";
+    if ($levelTotal > 0 && $levelTotal >= (int)$levelNum) {
+        $title .= " из $levelTotal";
+    }
+    return "<b>$title</b>\n".html2text($levelText);
 }
 
-function getHints($cookies,$domain,$gameid,$onlyOpen=false)
+function getHints($cookies,$domain,$gameid,$onlyOpen=false,$model=null)
 {
     $hints = Array();
     $remains = Array();
     $level = null;
     try {
-        $level = encxLevel(encxGameModel($cookies, $domain, $gameid));
+        $level = encxLevel($model ?? encxGameModel($cookies, $domain, $gameid));
     } catch (Throwable $e) {
         error_log('Encounter getHints failed: '.$e->getMessage());
     }
@@ -119,10 +123,10 @@ function isGameFinishedEvent($event)
  * Возвращает null, если состояние выяснить не удалось: недоступность движка
  * не должна приводить к ложной остановке игры.
  */
-function isGameFinished($cookies,$domain,$gameid)
+function isGameFinished($cookies,$domain,$gameid,$model=null)
 {
     try {
-        $model = encxGameModel($cookies, $domain, $gameid);
+        $model = $model ?? encxGameModel($cookies, $domain, $gameid);
     } catch (Throwable $e) {
         error_log('Encounter isGameFinished failed: '.$e->getMessage());
         return null;
@@ -387,14 +391,14 @@ function synthSectorForLevel($level)
     );
 }
 
-function getSectors($cookies,$domain,$gameid)
+function getSectors($cookies,$domain,$gameid,$model=null)
 {
     $result = Array(
       'text' => "На уровне нет разделения по секторам",
       'sectors' => Array(),
     );
     try {
-        $level = encxLevel(encxGameModel($cookies, $domain, $gameid));
+        $level = encxLevel($model ?? encxGameModel($cookies, $domain, $gameid));
     } catch (Throwable $e) {
         error_log('Encounter getSectors failed: '.$e->getMessage());
         return $result;
@@ -436,14 +440,14 @@ function getSectors($cookies,$domain,$gameid)
  * Бонусы текущего уровня из игровой модели движка.
  * Возвращает сводный текст и массив вида номер => [found, code, name, text].
  */
-function getBonuses($cookies,$domain,$gameid)
+function getBonuses($cookies,$domain,$gameid,$model=null)
 {
     $result = Array(
       'text' => "На уровне нет бонусов",
       'bonuses' => Array(),
     );
     try {
-        $level = encxLevel(encxGameModel($cookies, $domain, $gameid));
+        $level = encxLevel($model ?? encxGameModel($cookies, $domain, $gameid));
     } catch (Throwable $e) {
         error_log('Encounter getBonuses failed: '.$e->getMessage());
         return $result;
@@ -493,10 +497,10 @@ function engineClosureMessages($label, $number, $text = '')
     return $messages;
 }
 
-function getMessages($cookies,$domain,$gameid)
+function getMessages($cookies,$domain,$gameid,$model=null)
 {
     try {
-        $level = encxLevel(encxGameModel($cookies, $domain, $gameid));
+        $level = encxLevel($model ?? encxGameModel($cookies, $domain, $gameid));
     } catch (Throwable $e) {
       return Array('Нет сообщений организатора');
     }

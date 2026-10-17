@@ -33,7 +33,7 @@ docker run -d \
 Дополнительные переменные:
 
 - `ADMIN_USERNAME` — главный администратор;
-- `ENXBOT_CRON_INTERVAL` — интервал `cron.php`, по умолчанию 60 секунд;
+- `ENXBOT_CRON_INTERVAL` — пауза между проходами `cron.php`, по умолчанию 5 секунд; на каждую игру выполняется один запрос состояния за проход;
 - `ENXBOT_POLL_TIMEOUT` — таймаут long polling, по умолчанию 30 секунд;
 - `ENXBOT_SQLITE_PATH` — путь к базе, по умолчанию `/data/enxbot.sqlite`;
 - `PUBLIC_URL` — базовый URL дополнительных страниц вроде `map.php`, если они используются;

@@ -6,7 +6,10 @@ namespace Encx {
         public function setCodeSendTimeoutSeconds($seconds) {}
         public function setEngine($engine) {}
         public function importCookies($cookies) {}
-        public function getGameModel($id) {return file_get_contents(getenv('ENXBOT_BONUS_TEST_MODEL'));}
+        public function getGameModel($id) {
+            file_put_contents(getenv('ENXBOT_BONUS_TEST_REQUESTS'), "GET\n", FILE_APPEND);
+            return file_get_contents(getenv('ENXBOT_BONUS_TEST_MODEL'));
+        }
         public function close() {}
     }
 }
@@ -27,6 +30,7 @@ namespace {
     putenv('ENCX_ENGINE=legacy');
     putenv('ENXBOT_TG_LOG='.$log);
     putenv('ENXBOT_BONUS_TEST_MODEL='.$modelPath);
+    putenv('ENXBOT_BONUS_TEST_REQUESTS='.$work.'/requests.log');
     $socket = stream_socket_server('tcp://127.0.0.1:0', $errno, $error);
     if (!$socket) throw new RuntimeException('Could not reserve a local test port');
     $address = stream_socket_get_name($socket, false);
@@ -44,7 +48,9 @@ namespace {
         if (!$condition) throw new RuntimeException($message);
         $checks++;
     }
-    function runBonusCron($work) {
+    function runBonusCron($work, $expectedError = '') {
+        $requests = $work.'/requests.log';
+        $before = is_file($requests) ? count(file($requests)) : 0;
         $process = proc_open([PHP_BINARY, '-d', 'display_errors=stderr', __FILE__, '--cron', $work], [
             0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w'],
         ], $pipes);
@@ -52,7 +58,10 @@ namespace {
         $output = stream_get_contents($pipes[1]);
         $errors = stream_get_contents($pipes[2]);
         fclose($pipes[1]); fclose($pipes[2]);
-        bonusCheck(proc_close($process) === 0 && $errors === '', 'Cron failed: '.$output.$errors);
+        $expected = $expectedError === '' ? $errors === ''
+            : str_starts_with($errors, $expectedError) && !preg_match('/Fatal|Warning|Deprecated|Notice/', $errors);
+        bonusCheck(proc_close($process) === 0 && $expected, 'Cron failed: '.$output.$errors);
+        bonusCheck(count(file($requests)) === $before + 1, 'Cron fetched the same game more than once');
     }
     try {
         for ($attempt = 0; $attempt < 30; $attempt++) {
@@ -106,6 +115,18 @@ namespace {
         $before = file_get_contents($log);
         runBonusCron($work);
         bonusCheck(file_get_contents($log) === $before, 'A repeated cron sent duplicate bonus text');
+        $model['Level']['LevelId'] = 102;
+        $model['Level']['Number'] = 16;
+        $model['Levels'] = [];
+        file_put_contents($modelPath, json_encode($model));
+        runBonusCron($work);
+        bonusCheck((int)$db->query('SELECT last_level_id FROM games')->fetchColumn() === 102, 'New level was not detected on the next poll');
+        file_put_contents($modelPath, '{invalid JSON');
+        runBonusCron($work, 'Encounter cron state failed:');
+        bonusCheck($db->query('SELECT last_level_id || "/" || status FROM games')->fetchColumn() === '102/1', 'Unavailable engine lost the known level or stopped an active game');
+        $db->exec('INSERT INTO log (chat_id, time) VALUES (-1001, '.(time() - 90000).')');
+        runBonusCron($work, 'Encounter cron state failed:');
+        bonusCheck((int)$db->query('SELECT status FROM games')->fetchColumn() === 0, 'Engine failure disabled the independent idle-stop check');
         echo "Bonus notification regression checks passed: $checks\n";
     } finally {
         proc_terminate($server); proc_close($server);

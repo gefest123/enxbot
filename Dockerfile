@@ -34,7 +34,7 @@ ENV ENCX_BINDINGS_PATH=/opt/encx-php \
     HOME=/tmp \
     ENXBOT_SQLITE_PATH=/data/enxbot.sqlite \
     ENXBOT_PID_FILE=/tmp/enxbot-daemon.pid \
-    ENXBOT_CRON_INTERVAL=60 \
+    ENXBOT_CRON_INTERVAL=5 \
     ENXBOT_POLL_TIMEOUT=30 \
     ENXBOT_POLL_RETRY_DELAY=5
 
