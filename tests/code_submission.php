@@ -59,6 +59,25 @@ try {
     codeCheck(count(codeRequests($log)) === 5, 'A code was posted without an active player session');
     $finished = sendCode(encxNormalizeCookies('stoken=finished;'), $address, 424242, 'must-not-send');
     codeCheck($finished['levelid'] === -1 && $finished['result'] === 'Игра завершена', 'A confirmed finish was not preserved');
+    $single = sendCode($session, $address, 424243, 'single-sector-code');
+    codeCheck($single['result'] === "Код принят (2/4)\nЗакрыт сектор: 2. А_Б * [вход] <арка>", 'Accepted code did not identify the newly closed sector with its full label');
+    $multiple = sendCode($session, $address, 424243, 'multiple-sector-code');
+    codeCheck($multiple['result'] === "Код принят (3/4)\nЗакрыты секторы:\n• 1. 1+\n• 2. А_Б * [вход] <арка>", 'Multiple closed sectors or stable IDs were lost after reordering');
+    $unnamed = sendCode($session, $address, 424243, 'unnamed-sector-code');
+    codeCheck($unnamed['result'] === "Код принят (2/4)\nЗакрыт сектор: № 4", 'An unnamed sector lost its numeric fallback');
+    $rejected = sendCode($session, $address, 424243, 'rejected-sector-code');
+    codeCheck($rejected['result'] === 'Код не принят (2/4)', 'A rejected code claimed an external sector closure');
+    $unchanged = sendCode($session, $address, 424243, 'unchanged-sector-code');
+    codeCheck($unchanged['result'] === 'Код принят (1/4)', 'An already closed or unchanged sector was reported again');
+    $foreign = sendCode($session, $address, 424243, 'foreign-sector-code');
+    codeCheck($foreign['result'] === 'Код принят (2/4)', 'A different sector ID with the same order was misidentified');
+    $next = sendCode($session, $address, 424244, 'next-level-code');
+    codeCheck($next['UP'] === true && $next['levelid'] === 102 && $next['result'] === "Код принят\nЗакрыт сектор: 2. А_Б * [вход] <арка>", 'Level transition lost the last sector or reported a sector from the next level');
+    $lastSector = sendCode($session, $address, 424244, 'last-sector-code');
+    codeCheck($lastSector['levelid'] === -1 && $lastSector['result'] === "Код принят\nЗакрыт сектор: 2. А_Б * [вход] <арка>", 'Game completion lost the name of the last sector');
+    $ambiguous = sendCode($session, $address, 424243, 'next-level-code');
+    codeCheck($ambiguous['UP'] === true && $ambiguous['result'] === 'Код принят', 'A transition guessed among several remaining sectors');
+    codeCheck(count(codeRequests($log)) === 14, 'Reporting sector names submitted additional codes');
     echo "Code submission regression checks passed: $checks\n";
 } finally {
     proc_terminate($process);

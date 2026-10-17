@@ -165,6 +165,40 @@ function codeUnavailableLevelResult($model, $knownLevelId = 0, $answerResult = '
     return Array('result' => $message, 'levelid' => $finished ? -1 : $knownLevelId, 'UP' => false);
 }
 
+/** Match sectors within one level by ID, with Order as the legacy fallback. */
+function closedSectorLabels($oldLevel, $newLevel, $levelCompleted = false)
+{
+    $before = array();
+    foreach (array_values($oldLevel['Sectors'] ?? array()) as $index => $sector) {
+        $number = (int)($sector['Order'] ?? 0);
+        if ($number <= 0) $number = $index + 1;
+        $id = (int)($sector['SectorId'] ?? 0);
+        $key = $id > 0 ? 'id:'.$id : 'order:'.$number;
+        $name = trim((string)($sector['Name'] ?? ''));
+        $before[$key] = array('found' => !empty($sector['IsAnswered']), 'label' => $name !== '' ? $name : '№ '.$number);
+    }
+    if ($newLevel === null || (int)($oldLevel['LevelId'] ?? 0) !== (int)($newLevel['LevelId'] ?? 0)) {
+        if (!$levelCompleted) return array();
+        // After a transition the response may contain only the next level.
+        // The sole remaining sector is unambiguous; never guess among several.
+        $open = array_values(array_filter($before, static fn($sector) => !$sector['found']));
+        return count($open) === 1 ? array($open[0]['label']) : array();
+    }
+    $after = array();
+    foreach (array_values($newLevel['Sectors'] ?? array()) as $index => $sector) {
+        $number = (int)($sector['Order'] ?? 0);
+        if ($number <= 0) $number = $index + 1;
+        $id = (int)($sector['SectorId'] ?? 0);
+        $key = $id > 0 ? 'id:'.$id : 'order:'.$number;
+        $after[$key] = !empty($sector['IsAnswered']);
+    }
+    $labels = array();
+    foreach ($before as $key => $sector) {
+        if (!$sector['found'] && !empty($after[$key])) $labels[] = $sector['label'];
+    }
+    return $labels;
+}
+
 function sendCode($cookies,$domain,$gameid,$code)
 {
     $bonusAccepted = false;
@@ -215,13 +249,24 @@ function sendCode($cookies,$domain,$gameid,$code)
     }
     $result = $accepted === true ? 'Код принят' : ($accepted === false ? 'Код не принят' : '');
     $newLevel = encxLevel($after);
+    $newLevelId = (int)($newLevel['LevelId'] ?? 0);
+    $levelCompleted = isGameFinishedEvent($after['Event'] ?? 0)
+        || ($newLevelId > 0 && $newLevelId !== $levelId);
+    $closedText = '';
+    if ($accepted === true && !$bonusAccepted) {
+        $labels = closedSectorLabels($oldLevel, $newLevel, $levelCompleted);
+        if (count($labels) === 1) {
+            $closedText = "\nЗакрыт сектор: ".$labels[0];
+        } elseif ($labels) {
+            $closedText = "\nЗакрыты секторы:\n• ".implode("\n• ", $labels);
+        }
+    }
     if ($newLevel === null) {
-        return codeUnavailableLevelResult($after, $levelId, $result);
+        return codeUnavailableLevelResult($after, $levelId, $result.$closedText);
     }
 
-    $newLevelId = (int)($newLevel['LevelId'] ?? 0);
     if ($newLevelId > 0 && $newLevelId !== $levelId) {
-        return Array('result' => $result, 'levelid' => $newLevelId, 'UP' => true);
+        return Array('result' => $result.$closedText, 'levelid' => $newLevelId, 'UP' => true);
     }
 
     $total = count($newLevel['Sectors'] ?? array());
@@ -232,6 +277,7 @@ function sendCode($cookies,$domain,$gameid,$code)
         }
         $result .= " ($done/$total)";
     }
+    $result .= $closedText;
 
     $oldBonuses = array();
     foreach (($oldLevel['Bonuses'] ?? array()) as $bonus) {
