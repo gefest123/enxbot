@@ -62,6 +62,9 @@ done
 echo "== Скриншоты: HTTPS и ошибки рендерера =="
 php "$TESTS/screenshot.php" || exit 1
 
+echo "== Запоминание движка между клиентами и процессами =="
+php "$TESTS/engine_cache.php" || exit 1
+
 echo "== Источник encx-cli =="
 resolve_encx_source "$ROOT" || exit 1
 

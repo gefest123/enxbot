@@ -61,6 +61,7 @@ foreach ($db->query("SELECT name FROM sqlite_master WHERE type = 'table'") as $r
 
 echo "== Миграция со старой схемы ==\n";
 
+check('engine_cache создана', in_array('engine_cache', $tables, true));
 check('games.shtab_id добавлена', in_array('shtab_id', $columns('games'), true));
 check('codes.code_type добавлена', in_array('code_type', $columns('codes'), true));
 check('codes.find добавлена', in_array('find', $columns('codes'), true));

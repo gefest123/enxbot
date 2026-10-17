@@ -108,6 +108,37 @@ function encxCookieHeader($cookies)
     return implode('; ', $parts).($parts ? ';' : '');
 }
 
+/** Remember the first auto selection per domain, including across PHP processes. */
+function encxResolvedEngine($domain, $client)
+{
+    global $db;
+    static $known = array();
+    $key = strtolower(trim((string)$domain));
+    if (isset($known[$key])) {
+        return $known[$key];
+    }
+    if (isset($db) && $db instanceof PDO) {
+        $read = $db->prepare('SELECT engine FROM engine_cache WHERE domain = :domain');
+        $read->execute(array(':domain' => $key));
+        $cached = $read->fetchColumn();
+        if (in_array($cached, array('legacy', 'new'), true)) {
+            return $known[$key] = $cached;
+        }
+    }
+    $engine = $client->engine();
+    if (!in_array($engine, array('legacy', 'new'), true)) {
+        throw new RuntimeException('Не удалось определить движок Encounter');
+    }
+    if (isset($db) && $db instanceof PDO) {
+        $write = $db->prepare('INSERT INTO engine_cache (domain, engine) VALUES (:domain, :engine) ON CONFLICT(domain) DO NOTHING');
+        $write->execute(array(':domain' => $key, ':engine' => $engine));
+        // A concurrent first action may already have saved the domain's selection.
+        $read->execute(array(':domain' => $key));
+        $engine = $read->fetchColumn();
+    }
+    return $known[$key] = $engine;
+}
+
 function encxClient($domain, $cookies = '')
 {
     encxLoadBindings();
@@ -123,8 +154,13 @@ function encxClient($domain, $cookies = '')
     // The mobile-backed bindings otherwise limit code POSTs to one second,
     // independently of the HTTP timeout passed to the constructor.
     $client->setCodeSendTimeoutSeconds($timeoutSeconds);
-    $engine = getenv('ENCX_ENGINE');
-    $client->setEngine(is_string($engine) && $engine !== '' ? $engine : 'auto');
+    $engine = strtolower(trim((string)getenv('ENCX_ENGINE')));
+    $client->setEngine(in_array($engine, array('legacy', 'new'), true) ? $engine : 'auto');
+    if (!in_array($engine, array('legacy', 'new'), true)) {
+        // Resolve before importing credentials. Pin the result even when the
+        // bindings fell back after a failed probe and would otherwise try again.
+        $client->setEngine(encxResolvedEngine($domain, $client));
+    }
 
     $cookies = encxNormalizeCookies($cookies);
     if ($cookies !== '') {

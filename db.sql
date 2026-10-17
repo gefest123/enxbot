@@ -1,3 +1,8 @@
+CREATE TABLE IF NOT EXISTS engine_cache (
+  domain TEXT PRIMARY KEY,
+  engine TEXT NOT NULL CHECK (engine IN ('legacy', 'new'))
+);
+
 CREATE TABLE IF NOT EXISTS admins (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   admin_username TEXT
