@@ -25,6 +25,13 @@ if (str_contains($cookie, 'stoken=finished')) {
     return;
 }
 $gameId = (int)basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
+if ($gameId === 424247) {
+    $level = ['LevelId'=>101,'Number'=>7,'RequiredSectorsCount'=>1,'SectorsLeftToClose'=>1,'Sectors'=>[],'Bonuses'=>[]];
+    if ($answer === 'implicit-level-code') $level = ['LevelId'=>102,'Number'=>8,'Sectors'=>[],'Bonuses'=>[]];
+    echo json_encode(['Event'=>0,'GameId'=>$gameId,'Level'=>$level,
+        'EngineAction'=>['LevelAction'=>['IsCorrectAnswer'=>$answer === 'implicit-level-code']]]);
+    return;
+}
 if (in_array($gameId, [424243, 424244, 424245, 424246], true)) {
     $sectors = [
         ['SectorId'=>201,'Order'=>1,'Name'=>'1. 1+','IsAnswered'=>false],

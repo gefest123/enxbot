@@ -35,8 +35,10 @@ Telegram-бот для игры [Encounter](https://en.cx/). Помогает к
 мигрируется автоматически при старте.
 
 PHP-биндинги к движку и `libencx` берутся из публичного репозитория
-[`skrashevich/encx-cli`](https://github.com/skrashevich/encx-cli) (ветка
-`main`) и собираются в builder-стадии образа.
+[`skrashevich/encx-cli`](https://github.com/skrashevich/encx-cli) (тег
+`v0.26.0`) и собираются в builder-стадии образа. Требуются биндинги и
+библиотека версии v0.26.0 или новее: бот использует `resolveEngine()` и
+`Helpers::levelSectorProgress()`.
 
 ## Требования
 
@@ -110,10 +112,10 @@ docker run -d \
 
 1. **PHP 8.1+** (проверяется на 8.4–8.5) с расширениями `ffi`, `pdo_sqlite`,
    `curl`, `openssl`, `mbstring`, `zip`.
-2. **Go 1.22+** и `git` — для сборки PHP-биндингов `encx-cli`:
+2. **Go 1.27+** и `git` — для сборки PHP-биндингов `encx-cli`:
 
    ```sh
-   git clone https://github.com/skrashevich/encx-cli /opt/encx-cli
+   git clone --branch v0.26.0 --depth 1 https://github.com/skrashevich/encx-cli /opt/encx-cli
    bash /opt/encx-cli/bindings/php/build.sh
    export ENCX_BINDINGS_PATH=/opt/encx-cli/bindings/php
    ```
@@ -167,11 +169,15 @@ bare-metal — одноимёнными константами в `config.php`.
 | `ENCX_USE_HTTP`          |  нет  | auto                   | принудительный HTTP (локальные адреса определяются сами)      |
 | `ENCX_INSECURE_TLS`      |  нет  | `false`                | отключить проверку TLS для нестандартного домена Encounter    |
 
-В режиме `ENCX_ENGINE=auto` движок определяется при первом обращении к домену
-и сохраняется в SQLite (`engine_cache`). Последующие действия, другие процессы
+В режиме `ENCX_ENGINE=auto` движок определяется методом `resolveEngine()`
+библиотеки encx-cli. Только результат с `definitive=true` сохраняется
+в SQLite (`engine_cache`). Последующие действия, другие процессы
 бота и перезапуски используют сохранённый выбор без повторной сетевой проверки.
-Определение выполняется до передачи сессии, а найденный движок закрепляется
-в клиенте на всё действие. Явные `legacy` и `new` имеют приоритет над кешем.
+Определение выполняется до передачи сессии, а подтверждённый движок закрепляется
+в клиенте на всё действие. Временный fallback (`definitive=false`) не сохраняется
+и оставляет клиент в `auto`, чтобы библиотека могла повторить проверку.
+Старые записи кеша без подтверждения автоматически проверяются заново.
+Явные `legacy` и `new` имеют приоритет над кешем.
 Если домен перенесли на другой движок, задайте его явно либо удалите запись
 домена из `engine_cache` и перезапустите бота для нового определения.
 

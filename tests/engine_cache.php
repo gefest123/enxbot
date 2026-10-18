@@ -1,9 +1,9 @@
 <?php
 namespace Encx {
-    // A failed auto probe in the real bindings returns legacy without pinning it.
-    // This stand-in repeats the probe until the caller explicitly sets the mode.
+    // Only transport is replaced; confidence comes from the v0.26.0 contract.
     final class Client {
         public static $probes = 0;
+        public static $unavailable = [];
         public $domain;
         public $mode = 'auto';
         public $cookies = '';
@@ -16,12 +16,17 @@ namespace Encx {
         public function setEngine($engine) {$this->mode = $engine;}
         public function importCookies($cookies) {$this->cookies = $cookies;}
         public function engine() {
-            if ($this->mode !== 'auto') return $this->mode;
+            throw new \RuntimeException('Use resolveEngine(): engine() cannot distinguish a fallback');
+        }
+        public function resolveEngine() {
             self::$probes++;
             if ($this->cookies !== '') throw new \RuntimeException('Credentials reached the auto probe');
-            return str_starts_with(strtolower(trim($this->domain)), 'modern.') ? 'new' : 'legacy';
+            $domain = strtolower(trim($this->domain));
+            $definitive = empty(self::$unavailable[$domain]);
+            $engine = $definitive && str_starts_with($domain, 'modern.') ? 'new' : 'legacy';
+            return json_encode(['engine' => $engine, 'definitive' => $definitive]);
         }
-        public function getGameModel($id) {return $this->engine();}
+        public function getGameModel($id) {return $this->mode;}
         public function close() {}
     }
 }
@@ -51,7 +56,7 @@ namespace {
         engineCheck($first->mode === 'legacy' && $first->cookies !== '', 'Detected engine or session was not applied');
         $first->getGameModel(42);
         $first->getGameModel(42);
-        engineCheck(Encx\Client::$probes === 1, 'The same action repeated a failed auto probe');
+        engineCheck(Encx\Client::$probes === 1, 'The same action repeated a confirmed auto probe');
         $second = encxClient('city.en.cx', 'stoken=test-session;');
         $second->getGameModel(42);
         engineCheck(Encx\Client::$probes === 1, 'A new client repeated domain discovery');
@@ -80,6 +85,19 @@ namespace {
         engineCheck((int)$db->query('SELECT COUNT(*) FROM engine_cache')->fetchColumn() === 2, 'Explicit override changed cached auto selections');
         putenv('ENCX_ENGINE=auto');
         engineCheck(encxClient('modern.en.cx')->mode === 'new' && Encx\Client::$probes === 2, 'Returning to auto repeated detection');
+
+        Encx\Client::$unavailable['modern.retry.en.cx'] = true;
+        $temporary = encxClient('modern.retry.en.cx', 'stoken=test-session;');
+        engineCheck($temporary->mode === 'auto', 'A temporary fallback was pinned with setEngine');
+        engineCheck((int)$db->query("SELECT COUNT(*) FROM engine_cache WHERE domain='modern.retry.en.cx'")->fetchColumn() === 0, 'A temporary fallback was persisted');
+        unset(Encx\Client::$unavailable['modern.retry.en.cx']);
+        engineCheck(encxClient('modern.retry.en.cx')->mode === 'new', 'The next action did not recover after a failed probe');
+        engineCheck($db->query("SELECT engine FROM engine_cache WHERE domain='modern.retry.en.cx'")->fetchColumn() === 'new', 'Recovered engine was not persisted');
+
+        // Entries from the earlier PR did not distinguish fallback from a verdict.
+        $db->exec("INSERT INTO engine_cache (domain, engine) VALUES ('modern.stale.en.cx', 'legacy')");
+        engineCheck(encxClient('modern.stale.en.cx')->mode === 'new', 'An old unconfirmed cache entry bypassed discovery');
+        engineCheck((int)$db->query("SELECT confirmed FROM engine_cache WHERE domain='modern.stale.en.cx'")->fetchColumn() === 1, 'The old cache entry was not replaced by a confirmed verdict');
         echo "Engine cache regression checks passed: $checks\n";
     } finally {
         $db = null;

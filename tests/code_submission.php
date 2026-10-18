@@ -82,6 +82,10 @@ try {
     $zero = sendCode($session, $address, 424246, 'single-sector-code');
     codeCheck(str_ends_with($zero['result'], 'Всего секторов: 4. Осталось до АП: 0.'), 'Progress showed a negative remainder after reaching the threshold');
     codeCheck(count(codeRequests($log)) === 16, 'Reporting sector names submitted additional codes');
+    $implicit = sendCode($session, $address, 424247, 'implicit-level-code');
+    codeCheck($implicit['UP'] === true && $implicit['levelid'] === 102
+        && str_ends_with($implicit['result'], 'Всего секторов: 1. Осталось до АП: 0.'), 'Implicit level code lost library progress on transition');
+    codeCheck(count(codeRequests($log)) === 17, 'Reporting implicit code progress submitted an additional code');
     echo "Code submission regression checks passed: $checks\n";
 } finally {
     proc_terminate($process);

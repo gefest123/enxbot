@@ -5,6 +5,7 @@ namespace Encx {
         public static function newClientWithOptions(...$args) {return new self();}
         public function setCodeSendTimeoutSeconds($seconds) {}
         public function setEngine($engine) {}
+        public function resolveEngine() {throw new \RuntimeException('Explicit legacy mode must not probe');}
         public function importCookies($cookies) {}
         public function getGameModel($id) {
             file_put_contents(getenv('ENXBOT_BONUS_TEST_REQUESTS'), "GET\n", FILE_APPEND);

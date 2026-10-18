@@ -165,7 +165,7 @@ while($game = db_fetch_assoc($gameresult))
 
     $sectorsActual = getSectors($game['cookies'],$game["game_domain"],$game["game_id"],$model);
     $bonusesActual = getBonuses($game['cookies'],$game["game_domain"],$game["game_id"],$model);
-    $sectorProgress = sectorProgress(encxLevel($model));
+    $sectorProgress = encxSectorProgress(encxLevel($model));
 
     $groups = Array(
         Array('type' => 1, 'label' => 'Сектор', 'items' => $sectorsActual['sectors']),

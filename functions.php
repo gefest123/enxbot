@@ -165,19 +165,6 @@ function codeUnavailableLevelResult($model, $knownLevelId = 0, $answerResult = '
     return Array('result' => $message, 'levelid' => $finished ? -1 : $knownLevelId, 'UP' => false);
 }
 
-/** Sector totals and the remaining codes required to pass the level. */
-function sectorProgress($level, $completed = false)
-{
-    $sectors = $level['Sectors'] ?? array();
-    $total = count($sectors);
-    $done = 0;
-    foreach ($sectors as $sector) $done += !empty($sector['IsAnswered']) ? 1 : 0;
-    $required = (int)($level['RequiredSectorsCount'] ?? 0);
-    $passed = $completed || !empty($level['IsPassed']) || !empty($level['Dismissed']);
-    $remaining = $total > 0 ? ($passed ? 0 : max(0, ($required > 0 ? $required : $total) - $done)) : null;
-    return array('total' => $total, 'done' => $done, 'remaining' => $remaining);
-}
-
 /** Match sectors within one level by ID, with Order as the legacy fallback. */
 function closedSectorLabels($oldLevel, $newLevel, $levelCompleted = false)
 {
@@ -276,7 +263,7 @@ function sendCode($cookies,$domain,$gameid,$code)
     }
     // On transition, describe the level the code was submitted to.
     $progressLevel = $newLevelId === $levelId ? $newLevel : ($levelCompleted ? $oldLevel : null);
-    $progress = sectorProgress($progressLevel, $levelCompleted);
+    $progress = encxSectorProgress($progressLevel, $levelCompleted);
     $total = $progress['total'];
     $progressText = '';
     if ($total > 0) {
@@ -460,11 +447,11 @@ function synthSectorForLevel($level)
     if (!is_array($level)) {
         return Array('sectors' => Array(), 'text' => null);
     }
-    $requiredSectors = (int)($level['RequiredSectorsCount'] ?? 0);
-    if ($requiredSectors <= 0 || !empty($level['Dismissed'])) {
+    $progress = encxSectorProgress($level);
+    if ($progress['remaining'] === null || $progress['required'] <= 0 || !empty($level['Dismissed'])) {
         return Array('sectors' => Array(), 'text' => null);
     }
-    $passed = !empty($level['IsPassed']) || (int)($level['PassedSectorsCount'] ?? 0) > 0;
+    $passed = $progress['remaining'] === 0;
     return Array(
         'sectors' => Array(1 => Array('found' => $passed, 'code' => '')),
         'text' => $passed
@@ -496,25 +483,23 @@ function getSectors($cookies,$domain,$gameid,$model=null)
       }
       return $result;
     }
-    $sectors_total = count($level['Sectors']);
-    $sectors_done = 0;
+    $progress = encxSectorProgress($level);
+    $sectors_total = $progress['total'];
+    $sectors_done = $progress['done'];
     foreach ($level['Sectors'] as $sector) {
         $number = (int)($sector['Order'] ?? 0);
         if ($number <= 0) {
             $number = count($result['sectors']) + 1;
         }
         $found = !empty($sector['IsAnswered']);
-        if ($found) {
-            $sectors_done++;
-        }
         $result['sectors'][$number] = Array(
             'found' => $found,
             'code' => $found ? encxAnswerText($sector['Answer'] ?? null) : '',
             'label' => trim((string)($sector['Name'] ?? '')),
         );
     }
-    $sectors_rem = $sectors_total - $sectors_done;
-    $result['text'] = "На уровне $sectors_total сектора. Закрыто $sectors_done. Осталось закрыть $sectors_rem";
+    $sectors_rem = $progress['remaining'];
+    $result['text'] = "На уровне $sectors_total сектора. Закрыто $sectors_done. Осталось до АП: $sectors_rem";
     ksort($result['sectors'], SORT_NUMERIC);
     return $result;
 }
